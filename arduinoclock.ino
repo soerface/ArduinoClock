@@ -11,7 +11,9 @@
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
 #define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 
-#define FIRST_HAND 22
+#define THERMOMETER_DATA_PORT 21
+#define FIRST_HAND_PORT 22
+//                   to 33 (total 12)
 
 static boolean NUMBERS [10][5][3] = {{
 {1, 1, 1},
@@ -83,7 +85,7 @@ boolean CELSIUS[5][3] = {
 
 void setup() {
     Serial.begin(9600);
-    for (int i=FIRST_HAND; i<FIRST_HAND+12; i++)
+    for (int i=FIRST_HAND_PORT; i<FIRST_HAND_PORT+12; i++)
     {
         pinMode(i, OUTPUT);
     }
@@ -105,19 +107,30 @@ void loop() {
 void clock() {
     int current_minute = minute();
     int hand = (current_minute + 2) / 5 % 12;
-    Serial.println(current_minute);
-    Serial.println(hand);
+    //Serial.println(current_minute);
+    //Serial.println(hand);
     for(int i=0; i<12; i++) {
-        digitalWrite(i+FIRST_HAND, hand==i);
+        digitalWrite(i+FIRST_HAND_PORT, hand==i);
     }
-    Serial.println();
+    //Serial.println();
 }
 
 void thermometer() {
-    multiplex(4, 6);
+    multiplex(measure_temperature());
 }
 
-void multiplex(int a, int b) {
+float measure_temperature() {
+    return 46.5;
+}
+
+void multiplex(float value) {
+    int a = int(value / 10) % 10;
+    int b = int(value) % 10;
+    int c = int(value * 10) % 10;
+    Serial.print(a);
+    Serial.print(b);
+    Serial.print(c);
+    Serial.println();
     for(int col=0; col<9; col++) {
         for(int row=0; row<5; row++) {
             int current_number;
@@ -126,7 +139,7 @@ void multiplex(int a, int b) {
             } else if (col < 6) {
                 digitalWrite(row, NUMBERS[b][row][col % 3]);
             } else {
-                digitalWrite(row, CELSIUS[row][col % 3]);
+                digitalWrite(row, NUMBERS[c][row][col % 3]);
             }
         }
         digitalWrite(col, HIGH);
