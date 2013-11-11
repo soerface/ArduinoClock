@@ -7,11 +7,13 @@
  */
 
 #include <Time.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
 #define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 
-#define THERMOMETER_DATA_PORT 21
+#define ONE_WIRE_BUS 21
 #define FIRST_HAND_PORT 22
 //                   to 33 (total 12)
 
@@ -83,6 +85,9 @@ boolean CELSIUS[5][3] = {
 {1, 0, 0},
 {1, 1, 1}};
 
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
+
 void setup() {
     Serial.begin(9600);
     for (int i=FIRST_HAND_PORT; i<FIRST_HAND_PORT+12; i++)
@@ -91,6 +96,7 @@ void setup() {
     }
     setSyncProvider( requestSync);  //set function to call when sync required
     Serial.println("Waiting for sync message");
+    sensors.begin();
 }
 
 void loop() {
@@ -120,7 +126,8 @@ void thermometer() {
 }
 
 float measure_temperature() {
-    return 46.5;
+    sensors.requestTemperatures();
+    return sensors.getTempCByIndex(0);
 }
 
 void multiplex(float value) {
