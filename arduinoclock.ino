@@ -13,9 +13,11 @@
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
 #define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
 
+#define BRIGHTNESS 0.2 // min. 0.2
+
 #define ONE_WIRE_BUS 21
-#define FIRST_HAND_PORT 22
-//                   to 33 (total 12)
+#define FIRST_HAND_PORT 2
+//                   to 13 (total 12)
 
 static boolean NUMBERS [10][5][3] = {{
 {1, 1, 1},
@@ -111,18 +113,51 @@ void loop() {
 }
 
 void clock() {
+    int current_second = second();
     int current_minute = minute();
-    int hand = (current_minute + 2) / 5 % 12;
+    int current_hour = hour();
+    int second_hand = (current_second + 2) / 5 % 12;
+    int minute_hand = (current_minute + 2) / 5 % 12;
+    int hour_hand = current_hour % 12;
     //Serial.println(current_minute);
     //Serial.println(hand);
     for(int i=0; i<12; i++) {
-        digitalWrite(i+FIRST_HAND_PORT, hand==i);
+        int port = i+FIRST_HAND_PORT - 1;
+        if (i == 0) {
+            port = i+FIRST_HAND_PORT + 11;
+        }
+        if (hour_hand==i) {
+            analogWrite(port, 80 * BRIGHTNESS);
+        } else if (minute_hand==i) {
+            analogWrite(port, 24 * BRIGHTNESS);
+        } else if (second_hand==i) {
+            analogWrite(port, 5 * BRIGHTNESS);
+        } else {
+            analogWrite(port, 0);
+        }
     }
-    //Serial.println();
+    Serial.print("Uhrzeit: ");
+    Serial.print(hour());
+    Serial.print(":");
+    Serial.print(minute());
+    Serial.print(":");
+    Serial.print(second());
+    Serial.println();
+    Serial.print("Sekundenzeiger: ");
+    Serial.print(second_hand);
+    Serial.println();
+    Serial.print("Minutenzeiger: ");
+    Serial.print(minute_hand);
+    Serial.println();
+    Serial.print("Stundenzeiger: ");
+    Serial.print(hour_hand);
+    Serial.println();
+    Serial.println();
 }
 
 void thermometer() {
-    multiplex(measure_temperature());
+    //multiplex(measure_temperature());
+    measure_temperature();
 }
 
 float measure_temperature() {
@@ -136,7 +171,10 @@ void multiplex(float value) {
     int c = int(value * 10) % 10;
     Serial.print(a);
     Serial.print(b);
+    Serial.print(".");
     Serial.print(c);
+    Serial.print("C");
+    Serial.println();
     Serial.println();
     for(int col=0; col<9; col++) {
         for(int row=0; row<5; row++) {
