@@ -1,17 +1,8 @@
-/*
- * You can send the text on the next line using Serial Monitor to set the clock to noon Jan 1 2013
- T1357041600
- *
- * A Processing example sketch to automatically send the messages is inclided in the download
- * On Linux, you can use "date +T%s > /dev/ttyACM0" (UTC time zone)
- */
-
+#include <DS1307RTC.h>
 #include <Time.h>
+#include <Wire.h>
 #include <OneWire.h>
-//#include <DallasTemperature.h>
-
-#define TIME_HEADER  "T"   // Header tag for serial time sync message
-#define TIME_REQUEST  7    // ASCII bell character requests a time sync message 
+#include <DallasTemperature.h>
 
 #define BRIGHTNESS 3 // min. 0.2
 
@@ -19,7 +10,7 @@
 #define MINUTE_HAND_BRIGHTNESS 24 * BRIGHTNESS
 #define SECOND_HAND_BRIGHTNESS 5 * BRIGHTNESS
 
-#define ONE_WIRE_BUS 21
+#define ONE_WIRE_BUS 24
 #define FIRST_HAND_PORT 2
 #define CLOCK_CENTER_PORT 0
 //                   to 13 (total 12)
@@ -27,6 +18,10 @@
 //                   to 44 in Zweierschritten
 #define MATRIX_FIRST_COL_PORT 37
 //                   to 53 in Zweierschritten
+
+
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature sensors(&oneWire);
 
 static boolean NUMBERS [10][5][3] = {{
 {1, 1, 1},
@@ -89,50 +84,38 @@ static boolean NUMBERS [10][5][3] = {{
 {0, 0, 1},
 {1, 1, 1}}};
 
-/*
-boolean CELSIUS[5][3] = {
-{1, 1, 1},
-{1, 0, 0},
-{1, 0, 0},
-{1, 0, 0},
-{1, 1, 1}};
-*/
-
-OneWire oneWire(ONE_WIRE_BUS);
-//DallasTemperature sensors(&oneWire);
-
 void setup() {
-    Serial.begin(9600);
     for (int i=FIRST_HAND_PORT; i<FIRST_HAND_PORT+12; i++)
     {
         pinMode(i, OUTPUT);
     }
-    for (int i=MATRIX_FIRST_COL_PORT; i<MATRIX_FIRST_COL_PORT+16; i++)
+    for (int i=MATRIX_FIRST_COL_PORT; i<MATRIX_FIRST_COL_PORT+17; i++)
     {
         pinMode(i, OUTPUT);
     }
     pinMode(CLOCK_CENTER_PORT, OUTPUT);
     digitalWrite(CLOCK_CENTER_PORT, 0);
-    setSyncProvider(requestSync);  // set function to call when sync required
-    Serial.println("Waiting for sync message");
-    //sensors.begin();
+    sensors.begin();
 }
 
 void loop() {
-    if (Serial.available()) {
-        processSyncMessage();
-    }
-    if (timeStatus() == timeSet) {
+    float current_temperature = 88.8;
+    while (true) {
         clock();
-        thermometer();
+        multiplex(current_temperature);
+        if (!(second() % 30)) {
+            matrix_on();
+            current_temperature = measure_temperature();
+        }
     }
-    //delay(1000);
 }
 
 void clock() {
-    int current_second = second();
-    int current_minute = minute();
-    int current_hour = hour();
+    tmElements_t tm;
+    RTC.read(tm);
+    int current_second = tm.Second;
+    int current_minute = tm.Minute;
+    int current_hour = tm.Hour;
     int second_hand = (current_second + 2) / 5 % 12;
     int minute_hand = (current_minute + 2) / 5 % 12;
     int hour_hand = current_hour % 12;
@@ -154,17 +137,10 @@ void clock() {
     analogWrite(CLOCK_CENTER_PORT, (current_second % 2) * SECOND_HAND_BRIGHTNESS);
 }
 
-void thermometer() {
-    //multiplex(measure_temperature());
-    multiplex(millis() / 1000.0);
-}
-
-/*
 float measure_temperature() {
     sensors.requestTemperatures();
     return sensors.getTempCByIndex(0);
 }
-*/
 
 void multiplex(float value) {
     int a = int(value / 10) % 10;
@@ -173,8 +149,9 @@ void multiplex(float value) {
     int port = -1;
     for(int col=0; col<9; col++) {
         for(int row=0; row<5; row++) {
-            int current_number;
+            //int current_number;
             port = MATRIX_LAST_ROW_PORT - row * 2;
+            digitalWrite(port, HIGH);
             if (col < 3) {
                 digitalWrite(port, NUMBERS[a][row][col % 3]);
             } else if (col < 6) {
@@ -190,21 +167,14 @@ void multiplex(float value) {
     }
 }
 
-void processSyncMessage() {
-    unsigned long pctime;
-    const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
-
-    if(Serial.find(TIME_HEADER)) {
-        pctime = Serial.parseInt();
-        if(pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-            setTime(pctime); // Sync Arduino clock to the time received on the serial port
+void matrix_on() {
+    int port;
+    for(int col=0; col<9; col++) {
+        for(int row=0; row<5; row++) {
+            port = MATRIX_LAST_ROW_PORT - row * 2;
+            digitalWrite(port, HIGH);
         }
+        port = MATRIX_FIRST_COL_PORT + col * 2;
+        digitalWrite(port, HIGH);
     }
 }
-
-time_t requestSync()
-{
-  Serial.write(TIME_REQUEST);
-  return 0; // the time will be sent later in response to serial mesg
-}
-
