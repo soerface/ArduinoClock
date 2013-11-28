@@ -6,7 +6,6 @@ OneWire ds(24);  // on pin 10
 void setup(void) {
   // initialize inputs/outputs
   // start serial port
-  Serial.begin(9600);
 }
 
 void loop(void) {

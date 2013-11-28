@@ -2,7 +2,6 @@
 #include <Time.h>
 #include <Wire.h>
 #include <OneWire.h>
-#include <DallasTemperature.h>
 
 #define BRIGHTNESS 3 // min. 0.2
 
@@ -20,8 +19,6 @@
 //                   to 53 in Zweierschritten
 
 
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
 
 static boolean NUMBERS [10][5][3] = {{
 {1, 1, 1},
@@ -95,17 +92,18 @@ void setup() {
     }
     pinMode(CLOCK_CENTER_PORT, OUTPUT);
     digitalWrite(CLOCK_CENTER_PORT, 0);
-    sensors.begin();
 }
 
 void loop() {
     float current_temperature = 88.8;
+    int last_update = 0;
     while (true) {
         clock();
         multiplex(current_temperature);
-        if (!(second() % 30)) {
-            matrix_on();
-            current_temperature = measure_temperature();
+        if (second() != last_update) {
+            //matrix_on();
+            measure_temperature(current_temperature);
+            last_update = second();
         }
     }
 }
@@ -137,9 +135,65 @@ void clock() {
     analogWrite(CLOCK_CENTER_PORT, (current_second % 2) * SECOND_HAND_BRIGHTNESS);
 }
 
-float measure_temperature() {
-    sensors.requestTemperatures();
-    return sensors.getTempCByIndex(0);
+void measure_temperature(float &current_temperature) {
+    // multiplex several times in this function to decrease flickering
+    byte addr[8];
+    byte data[12];
+    byte present = 0;
+    OneWire ds(ONE_WIRE_BUS);
+    if (!ds.search(addr)) {
+        ds.reset_search();
+        current_temperature = 88.8;
+        return;
+    }
+
+    //if (OneWire::crc8(addr, 7) != addr[7]) {
+    //    Serial.print("CRC is not valid!\n");
+    //    return;
+    //}
+
+    multiplex(current_temperature);
+    ds.reset();
+    multiplex(current_temperature);
+    ds.select(addr);
+    multiplex(current_temperature);
+    //ds.write(0x44, 1);         // start conversion, with parasite power on at the end
+    ds.write(0x44, 0);         // start conversion, with parasite power off at the end
+
+    //delay(1000); // if using parasite power
+    present = ds.reset();
+    multiplex(current_temperature);
+    ds.select(addr);
+    multiplex(current_temperature);
+    ds.write(0xBE);
+    for (int i=0; i<9; i++) {
+        data[i] = ds.read();
+    }
+    float temperature;
+    temperature = data[0] >> 4;
+    temperature += (data[1] & 0b00000111) << 4;
+    int fraction = data[0] & 0b00001111;
+    for (int i=0; i<4; i++) {
+        multiplex(current_temperature);
+        if (fraction & 1 << i) {
+            switch (i) {
+                case 0:
+                    temperature += 0.0625;
+                    break;
+                case 1:
+                    temperature += 0.1250;
+                    break;
+                case 2:
+                    temperature += 0.25;
+                    break;
+                case 3:
+                    temperature += 0.5;
+                    break;
+            }
+        }
+    }
+    current_temperature = temperature;
+    return;
 }
 
 void multiplex(float value) {
