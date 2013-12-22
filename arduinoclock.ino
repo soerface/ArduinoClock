@@ -100,8 +100,8 @@ void loop() {
     while (true) {
         clock();
         multiplex(current_temperature);
-        if (second() != last_update) {
-            //matrix_on();
+        if (second() > last_update + 30) {
+            matrix_on();
             measure_temperature(current_temperature);
             last_update = second();
         }
